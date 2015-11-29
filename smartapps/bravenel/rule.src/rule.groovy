@@ -409,6 +409,9 @@ def selectActionsTrue() {
 			input "dimBTrue", "capability.switchLevel", title: "Set these other dimmers", multiple: true, submitOnChange: true, required: false
 			if(dimBTrue) input "dimLBTrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
 			if(dimLBTrue) setActTrue(dimBTrue, "Dim: $dimBTrue: $dimLBTrue")
+			input "ctTrue", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
+			if(ctTrue) input "ctLTrue", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
+			if(ctLTrue) setActTrue(ctTrue, "Color Temperature: $ctTrue: $ctLTrue")
 			input "bulbsTrue", "capability.colorControl", title: "Set color for these bulbs", multiple: true, required: false, submitOnChange: true
 			if(bulbsTrue) {
 				input "colorTrue", "enum", title: "Bulb color?", required: true, multiple: false, submitOnChange: true,
@@ -493,6 +496,9 @@ def selectActionsFalse() {
 			input "dimBFalse", "capability.switchLevel", title: "Set these other dimmers", multiple: true, submitOnChange: true, required: false
 			if(dimBFalse) input "dimLBFalse", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
 			if(dimLBFalse) setActFalse(dimBFalse, "Dim: $dimBFalse: $dimLBFalse")
+			input "ctFalse", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
+			if(ctFalse) input "ctLFalse", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
+			if(ctLFalse) setActFalse(ctFalse, "Color Temperature: $ctFalse: $ctLFalse")
 			input "bulbsFalse", "capability.colorControl", title: "Set color for these bulbs", multiple: true, required: false, submitOnChange: true
 			if(bulbsFalse) {
 				input "colorFalse", "enum", title: "Bulb color?", required: true, multiple: false, submitOnChange: true,
@@ -826,6 +832,7 @@ def runRule(delay) {
 				if(pendedOffFalse)	unschedule(pendingOffFalse)
 				if(dimATrue) 		dimATrue.setLevel(dimLATrue)
 				if(dimBTrue) 		dimBTrue.setLevel(dimLBTrue)
+				if(ctTrue)   		ctTrue.setColorTemperature(ctLTrue)
 				if(bulbsTrue)		setColor(true)
 				if(lockTrue) 		lockTrue.lock()
 				if(unlockTrue) 		unlockTrue.unlock()
@@ -847,6 +854,7 @@ def runRule(delay) {
 				if(pendedOffTrue)	unschedule(pendingOffTrue)
 				if(dimAFalse) 		dimAFalse.setLevel(dimLAFalse)
 				if(dimBFalse) 		dimBFalse.setLevel(dimLBFalse)
+				if(ctFalse)   		ctFalse.setColorTemperature(ctLFalse)
 				if(bulbsFalse)		setColor(false)
 				if(lockFalse) 		lockFalse.lock()
 				if(unlockFalse) 	unlockFalse.unlock()
