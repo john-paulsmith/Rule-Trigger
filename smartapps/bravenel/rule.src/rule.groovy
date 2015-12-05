@@ -443,6 +443,7 @@ def selectActionsTrue() {
 			if(dimBTrue) {
             	input "dimLBTrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
 				if(dimLBTrue) setActTrue("Dim: $dimBTrue: $dimLBTrue")
+            }
 
 			input "ctTrue", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
 			if(ctTrue) input "ctLTrue", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
