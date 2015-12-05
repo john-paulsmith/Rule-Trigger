@@ -1,7 +1,7 @@
 /**
- *  Trigger
+ *  Trigr
  *
- *	Version 1.1.8   2 Dec 2015
+ *	Version 1.3.0   5 Dec 2015
  *
  *  Copyright 2015 Bruce Ravenel
  *
@@ -16,12 +16,12 @@
  *
  */
 definition(
-    name: "Trigger",
+    name: "Trigr",
     namespace: "bravenel",
     author: "Bruce Ravenel",
-    description: "Trigger",
+    description: "Trigr",
     category: "Convenience",
-    parent: "bravenel:Trigger Happy",
+    parent: "bravenel:Rule Machine",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/MyApps/Cat-MyApps.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/MyApps/Cat-MyApps@2x.png"
 )
@@ -38,10 +38,12 @@ preferences {
 def selectTriggerActs() {
 	dynamicPage(name: "selectTriggerActs", title: "Select Triggers and Actions", uninstall: true, install: true) {
 		section() {     
-			label title: "Name the Trigger", required: true
-			def condLabel = conditionLabel()
-			href "selectConditions", title: "Define Triggers", description: condLabel ? (condLabel) : "Tap to set", required: true, state: condLabel ? "complete" : null, submitOnChange: true
-			href "selectActionsTrue", title: "Select the Actions", description: state.actsTrue ? state.actsTrue : "Tap to set", state: state.actsTrue ? "complete" : null
+			label title: "First, Name the Trigger", required: true, submitOnChange: true
+//            if(app.label) {
+				def condLabel = conditionLabel()
+				href "selectConditions", title: "Define Triggers", description: condLabel ? (condLabel) : "Tap to set", required: true, state: condLabel ? "complete" : null, submitOnChange: true
+				href "selectActionsTrue", title: "Select the Actions", description: state.actsTrue ? state.actsTrue : "Tap to set", state: state.actsTrue ? "complete" : null
+//            }
 		}
 		section(title: "More options", hidden: hideOptionsSection(), hideable: true) {
 			def timeLabel = timeIntervalLabel()
@@ -87,7 +89,7 @@ def selectConditions() {
 							def thisDev = "rDev$i"
 							getDevs(xCapab, thisDev, true)
 							def myDev = settings.find {it.key == thisDev}
-							if(myDev) if(myDev.value.size() > 1) getAnyAll(thisDev)
+							if(myDev) if(myDev.value.size() > 1 && xCapab != "Rule truth") getAnyAll(thisDev)
 							if(xCapab in ["Temperature", "Humidity", "Illuminance", "Dimmer level", "Energy meter", "Power meter", "Battery"]) getRelational(thisDev)
 						} else if(xCapab == "Button") {
 							def thisDev = "rDev$i"
@@ -173,6 +175,11 @@ def getDevs(myCapab, dev, multi) {
 			thisName = "Button devices"
 			thisCapab = "button"
 			break
+		case "Rule truth":
+        	thisName = "Rules"
+            def theseRules = parent.ruleList(app.label)
+        	def result = input dev, "enum", title: thisName, required: true, multiple: multi, submitOnChange: true, options: theseRules.sort()
+			return result
 		case "Battery":
 			thisName = multi ? "Batteries" : "Battery"
 			thisCapab = "battery"
@@ -194,7 +201,7 @@ def getRelational(myDev) {
 }
 
 def getCapab(myCapab) { 
-	def myOptions = ["Switch", "Physical Switch", "Motion", "Acceleration", "Contact", "Presence", "Lock", "Temperature", "Humidity", "Illuminance", "Certain Time", 
+	def myOptions = ["Switch", "Physical Switch", "Motion", "Acceleration", "Contact", "Presence", "Lock", "Temperature", "Humidity", "Illuminance", "Certain Time", "Rule truth",
     	"Mode", "Energy meter", "Power meter", "Water sensor", "Battery", "Routine", "Button", "Dimmer level", "Carbon monoxide detector", "Smoke detector", "Smart Home Monitor"]
 	def result = input myCapab, "enum", title: "Select capability", required: false, options: myOptions.sort(), submitOnChange: true
 }
@@ -213,6 +220,7 @@ def getState(myCapab, n) {
 	else if(myCapab == "Water sensor")		result = input "state$n", "enum", title: "Water becomes ", options: ["dry", "wet"], defaultValue: "wet"
 	else if(myCapab == "Button")			result = input "state$n", "enum", title: "Button pushed or held ", options: ["pushed", "held"], defaultValue: "pushed"
     else if(myCapab == "Smart Home Monitor") result = input "state$n", "enum", title: "SHM state", options: ["away" : "Arm (away)", "stay" : "Arm (stay)", "off" : "Disarm"]
+    else if(myCapab == "Rule truth") 	result = input "state$n", "enum", title: "Rule truth becomes ", options: ["true", "false"], defaultValue: "true"
 	else if(myCapab in ["Temperature", "Humidity", "Illuminance", "Energy meter", "Power meter", "Battery", "Dimmer level"]) {
     	input "isDev$n", "bool", title: "Relative to another device?", multiple: false, required: false, submitOnChange: true, defaultValue: false
         def myDev = settings.find {it.key == "isDev$n"}
@@ -296,13 +304,15 @@ def conditionLabelN(i) {
 		else if(thisCapab.value == "Energy meter")	result = "Energy level becomes " 
 		else if(thisCapab.value == "Power meter")	result = "Power level becomes " 
 		else if(thisCapab.value == "Battery")		result = "Battery level becomes "
+        else if(thisCapab.value == "Rule truth") 	result = "Rule truth becomes "
         	else if(thisCapab.value == "Button") {
             		result = "$thisDev.value button $myButton.value "                
 			def thisState = settings.find {it.key == "state$i"}
 			result = result + thisState.value
                 	return result
 		}
-		result = result + (myAny ? thisDev.value : thisDev.value[0]) + " " + ((thisAll ? thisAll.value : false) ? "all " : myAny)
+        if(thisCapab.value == "Rule truth") result = result = result + (thisDev.value.size() > 1 ? ("$thisDev.value any ") : (thisDev.value[0] + " "))
+		else result = result + (myAny ? thisDev.value : thisDev.value[0]) + " " + ((thisAll ? thisAll.value : false) ? "all " : myAny)
 		def thisRel = settings.find {it.key == "RelrDev$i"}
 		if(thisCapab.value in ["Temperature", "Humidity", "Illuminance", "Dimmer level", "Energy meter", "Power meter", "Battery"]) result = result + " " + thisRel.value + " "
 		if(thisCapab.value == "Physical Switch") result = result + "physical "
@@ -332,7 +342,7 @@ def addToActTrue(str) {
 }
 
 def buildActTrue(str, brackets) {
-	log.debug "buildAct: $str, $brackets"
+//	log.debug "buildAct: $str, $brackets"
 	state.actsTrue = state.actsTrue + (brackets ? stripBrackets("$str") : str)
 }
 
@@ -342,6 +352,10 @@ def selectActionsTrue() {
 		section("") {
 			input "onSwitchTrue", "capability.switch", title: "Turn on these switches", multiple: true, required: false, submitOnChange: true
 			setActTrue(onSwitchTrue, "On: $onSwitchTrue")
+//			input "refreshSwitchTrue", "capability.switch", title: "Refresh these switches", multiple: true, required: false, submitOnChange: true
+//			setActTrue(refreshSwitchTrue, "Refresh: $refreshSwitchTrue")
+//			input "pollSwitchTrue", "capability.switch", title: "Poll these switches", multiple: true, required: false, submitOnChange: true
+//			setActTrue(pollSwitchTrue, "Refresh: $pollSwitchTrue")
 			input "offSwitchTrue", "capability.switch", title: "Turn off these switches", multiple: true, required: false, submitOnChange: true
 			setActTrue(offSwitchTrue, "Off: $offSwitchTrue")
 			input "toggleSwitchTrue", "capability.switch", title: "Toggle these switches", multiple: true, required: false, submitOnChange: true
@@ -406,6 +420,9 @@ def selectActionsTrue() {
 			def phrases = location.helloHome?.getPhrases()*.label
 			input "myPhraseTrue", "enum", title: "Routine to run", required: false, options: phrases.sort(), submitOnChange: true
 			if(myPhraseTrue) addToActTrue("Routine: $myPhraseTrue")
+            def theseRules = parent.ruleList(app.label)
+            input "ruleTrue", "enum", title: "Rules to evaluate", required: false, multiple: true, options: theseRules.sort(), submitOnChange: true
+            if(ruleTrue) setActTrue(true, "Rules: $ruleTrue")
 			href "selectMsgTrue", title: "Send a message", description: state.msgTrue ? state.msgTrue : "Tap to set", state: state.msgTrue ? "complete" : null
 			if(state.msgTrue) addToActTrue(state.msgTrue)
 			input "delayTrue", "number", title: "Delay this action by this many minutes", required: false, submitOnChange: true
@@ -449,7 +466,13 @@ def installed() {
 def updated() {
 	unschedule()
 	unsubscribe()
+    parent.unSubscribeRule(app.label)
 	initialize()
+}
+
+def uninstalled() {
+//	log.debug "uninstalled called"
+	parent.removeChild(app.label)
 }
 
 def initialize() {
@@ -510,6 +533,9 @@ def initialize() {
 				break
 			case "Button":
 				subscribe((settings.find{it.key == "rDev$i"}).value, "button", allHandler)
+				break
+			case "Rule truth":
+				parent.subscribeRule(app.label, (settings.find{it.key == "rDev$i"}).value, myState, allHandler)
 				break
 			case "Physical Switch":
 				subscribe((settings.find{it.key == "rDev$i"}).value, "switch.$myState", physicalHandler)
@@ -667,6 +693,8 @@ def doTrigger(delay) {
 	if(delayTrue > 0 && !delay) doDelayTrue(delayTrue)
 	else {
 		if(onSwitchTrue) 		onSwitchTrue.on()
+        if(refreshSwitchTrue)	refreshSwitchTrue.refresh()
+        if(pollSwitchTrue)		pollSwitchTrue.poll()
 		if(offSwitchTrue) 		offSwitchTrue.off()
 		if(toggleSwitchTrue)		toggle(toggleSwitchTrue)
 		if(delayedOffTrue)		runIn(delayMinutesTrue * 60, delayOffTrue)
@@ -685,6 +713,7 @@ def doTrigger(delay) {
 							if(thermoFanTrue)	thermoTrue.setThermostatFanMode(thermoFanTrue)   }
 		if(alarmTrue)			sendLocationEvent(name: "alarmSystemStatus", value: "$alarmTrue")
 		if(modeTrue) 			setLocationMode(modeTrue)
+        if(ruleTrue)			parent.runRule(ruleTrue, app.label)
 		if(myPhraseTrue)		location.helloHome.execute(myPhraseTrue)
 		if(pushTrue)			sendPush(msgTrue ?: "Rule $app.label True")
 		if(phoneTrue)			sendSms(phoneTrue, msgTrue ?: "Rule $app.label True")
@@ -736,6 +765,7 @@ def testEvt(evt) {
     }
 	for(int i = 1; i < state.howMany; i++) {
 		def myDev = (settings.find {it.key == "rDev$i"}).value
+        log.debug "testEvt: $myDev, $i, $evt.displayName"
 		myDev.each {if(evt.displayName == it.displayName) {
 			if(evt.name == "button") result = getButton(myDev, evt, i)
 			else result = getOperand(i)}
@@ -774,6 +804,11 @@ def disabledHandler(evt) {
 	state.disabled = evt.value == "on"
 }
 
+def ruleHandler(rule, truth) {
+//	log.debug "ruleHandler called"
+	if(logging) log.info "$app.label: $rule is $truth"
+    doTrigger(true)
+}
 
 //  private execution filter methods follow
 

@@ -3,7 +3,7 @@
  *
  *  Copyright 2015 Bruce Ravenel
  *
- *  Version 1.2.6   28 Nov 2015
+ *  Version 1.3.0   5 Dec 2015
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -39,21 +39,21 @@ preferences {
 }
 
 def selectRule() {
-	dynamicPage(name: "selectRule", title: "Select Conditions, Rule and Results", uninstall: true, install: true) {
+	dynamicPage(name: "selectRule", title: "Select Conditions, Rule and Actions", uninstall: true, install: true) {
 		section() {     
-			label title: "Name the Rule", required: true
+			label title: "First, Name the Rule", required: true
 			def condLabel = conditionLabel()
 			href "selectConditions", title: "Define Conditions", description: condLabel ? (condLabel) : "Tap to set", required: true, state: condLabel ? "complete" : null, submitOnChange: true
-			href "defineRule", title: "Define the Rule", description: state.str ? (state.str) : "Tap to set", state: state.str ? "complete" : null
-			href "selectActionsTrue", title: "Select the Actions for True", description: state.actsTrue ? state.actsTrue : "Tap to set", state: state.actsTrue ? "complete" : null
-			href "selectActionsFalse", title: "Select the Actions for False", description: state.actsFalse ? state.actsFalse : "Tap to set", state: state.actsFalse ? "complete" : null
+			href "defineRule", title: "Define the Rule", description: state.str ? (state.str) : "Tap to set", state: state.str ? "complete" : null, submitOnChange: true
+			href "selectActionsTrue", title: "Select the Actions for True", description: state.actsTrue ? state.actsTrue : "Tap to set", state: state.actsTrue ? "complete" : null, submitOnChange: true
+			href "selectActionsFalse", title: "Select the Actions for False", description: state.actsFalse ? state.actsFalse : "Tap to set", state: state.actsFalse ? "complete" : null, submitOnChange: true
 		}
 		section(title: "More options", hidden: hideOptionsSection(), hideable: true) {
 			input "modesZ", "mode", title: "Evaluate only when mode is", multiple: true, required: false
 			paragraph "Advanced Rule Input allows for parenthesized sub-rules."
 			input "advanced", "bool", title: "Advanced Rule Input", required: false
 			input "disabled", "capability.switch", title: "Switch to disable rule when ON", required: false, multiple: false
-			input "logging", "bool", title: "Enable event and rule logging", required: false, defaultValue: false
+			input "logging", "bool", title: "Enable event and rule logging", required: false, defaultValue: true
    		}    
 	}
 }
@@ -62,7 +62,7 @@ def selectRule() {
 
 def selectConditions() {
     def ct = settings.findAll{it.key.startsWith("rCapab")}
-    state.howMany = ct.size() + 1
+    state.howMany = ct.size() + 1							// initial value is 1
 	dynamicPage(name: "selectConditions", title: "Select Conditions", uninstall: false) {
 		if(state.howMany) {
 			for (int i = 1; i <= state.howMany; i++) {
@@ -72,7 +72,7 @@ def selectConditions() {
 					def myCapab = settings.find {it.key == thisCapab}
 					if(myCapab) {
 						def xCapab = myCapab.value // removed , "Certain Time"
-						if(!(xCapab in ["Time of day", "Days of week", "Mode"])) {
+						if(!(xCapab in ["Time of day", "Days of week", "Mode", "Smart Home Monitor"])) {
 							def thisDev = "rDev$i"
 							getDevs(xCapab, thisDev, true)
 							def myDev = settings.find {it.key == thisDev}
@@ -139,10 +139,23 @@ def getDevs(myCapab, dev, multi) {
 			thisName = "Power meter" + (multi ? "s" : "")
 			thisCapab = "powerMeter"
 			break
+		case "Carbon monoxide detector":
+			thisName = "CO detector" + (multi ? "s" : "")
+			thisCapab = "carbonMonoxideDetector"
+			break
+		case "Smoke detector":
+			thisName = "Smoke detector" + (multi ? "s" : "")
+			thisCapab = "smokeDetector"
+			break
 		case "Water sensor":
 			thisName = "Water sensors"
 			thisCapab = "waterSensor"
 			break
+		case "Rule truth":
+        	thisName = "Rules"
+            def theseRules = parent.ruleList(app.label)
+        	def result = input dev, "enum", title: thisName, required: true, multiple: multi, submitOnChange: true, options: theseRules.sort()
+			return result
 		case "Battery":
 			thisName = multi ? "Batteries" : "Battery"
 			thisCapab = "battery"
@@ -159,22 +172,26 @@ def getRelational(myDev) {
 }
 
 def getCapab(myCapab) {  // removed , "Valve" to avoid confusion, and , "Certain Time"
-	def myOptions = ["Switch", "Motion", "Acceleration", "Contact", "Presence", "Lock", "Temperature", "Humidity", "Illuminance", "Time of day", 
-    	"Days of week", "Mode", "Dimmer level", "Energy meter", "Power meter", "Water sensor", "Battery"]
+	def myOptions = ["Switch", "Motion", "Acceleration", "Contact", "Presence", "Lock", "Temperature", "Humidity", "Illuminance", "Time of day", "Rule truth",
+    	"Days of week", "Mode", "Dimmer level", "Energy meter", "Power meter", "Water sensor", "Battery", "Carbon monoxide detector", "Smoke detector", "Smart Home Monitor"]
 	def result = input myCapab, "enum", title: "Select capability", required: false, options: myOptions.sort(), submitOnChange: true
 }
 
 def getState(myCapab, n) {
 	def result = null
 	def days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-	if     (myCapab == "Switch") 		result = input "state$n", "enum", title: "Switch state", options: ["on", "off"]
+	if     (myCapab == "Switch") 		result = input "state$n", "enum", title: "Switch state", options: ["on", "off"], defaultValue: "on"
 	else if(myCapab == "Motion") 		result = input "state$n", "enum", title: "Motion state", options: ["active", "inactive"], defaultValue: "active"
-	else if(myCapab == "Acceleration")	result = input "state$n", "enum", title: "Acceleration state", options: ["active", "inactive"]
-	else if(myCapab == "Contact") 		result = input "state$n", "enum", title: "Contact state", options: ["open", "closed"]
+	else if(myCapab == "Acceleration")	result = input "state$n", "enum", title: "Acceleration state", options: ["active", "inactive"], defaultValue: "active"
+	else if(myCapab == "Contact") 		result = input "state$n", "enum", title: "Contact state", options: ["open", "closed"], defaultValue: "open"
 	else if(myCapab == "Presence") 		result = input "state$n", "enum", title: "Presence state", options: ["present", "not present"], defaultValue: "present"
-	else if(myCapab == "Lock")		result = input "state$n", "enum", title: "Lock state", options: ["locked", "unlocked"]
-	else if(myCapab == "Water sensor")	result = input "state$n", "enum", title: "Water state", options: ["dry", "wet"]
+	else if(myCapab == "Lock")		result = input "state$n", "enum", title: "Lock state", options: ["locked", "unlocked"], defaultValue: "unlocked"
+	else if(myCapab == "Carbon monoxide detector")		result = input "state$n", "enum", title: "CO becomes ", options: ["clear", ,"detected", "tested"], defaultValue: "detected"
+	else if(myCapab == "Smoke detector")		result = input "state$n", "enum", title: "Smoke becomes ", options: ["clear", ,"detected", "tested"], defaultValue: "detected"
+	else if(myCapab == "Water sensor")	result = input "state$n", "enum", title: "Water state", options: ["dry", "wet"], defaultValue: "wet"
 	else if(myCapab == "Dimmer level")	result = input "state$n", "number", title: "Dimmer level", range: "0..100"
+    else if(myCapab == "Smart Home Monitor") result = input "state$n", "enum", title: "SHM state", options: ["away" : "Arm (away)", "stay" : "Arm (stay)", "off" : "Disarm"]
+    else if(myCapab == "Rule truth") 	result = input "state$n", "enum", title: "Rule truth becomes ", options: ["true", "false"], defaultValue: "true"
 	else if(myCapab in ["Temperature", "Humidity", "Illuminance", "Energy meter", "Power meter", "Battery"]) {
     	input "isDev$n", "bool", title: "Relative to another device?", multiple: false, required: false, submitOnChange: true, defaultValue: false
         def myDev = settings.find {it.key == "isDev$n"}
@@ -218,14 +235,17 @@ def certainTime() {
 }
 
 def conditionLabel() {
+	def howMany = state.howMany
 	def result = ""
-	if(state.howMany) {
-		for (int i = 1; i < state.howMany; i++) {
-			result = result + conditionLabelN(i)
-			if((i + 1) < state.howMany) result = result + "\n"
+	if(howMany) {
+		for (int i = 1; i < howMany; i++) {
+        	def thisCapab = settings.find {it.key == "rCapab$i"}
+            if(!thisCapab) return result
+            result = result + conditionLabelN(i) + (getOperand(i) ? " [TRUE]" : " [FALSE]")
+			if(i < howMany - 1) result = result + "\n"
 		}
-        if(state.howMany == 2) {
-        	state.str = result[0..-1]
+        if(howMany == 2) {
+        	state.str = result[0..-8]
         	state.eval = [1]
         }
     }
@@ -234,12 +254,15 @@ def conditionLabel() {
 
 def conditionLabelN(i) {
 	def result = ""
-        def thisCapab = settings.find {it.key == "rCapab$i"}
-        if(!thisCapab) return result
-        if(thisCapab.value == "Time of day") result = "Time between " + timeIntervalLabel()
-        else if(thisCapab.value == "Days of week") result = "Day i" + (days.size() > 1 ? "n " + days : "s " + days[0])
-        else if(thisCapab.value == "Mode") result = "Mode i" + (modes.size() > 1 ? "n " + modes : "s " + modes[0])
-        else {
+    def thisCapab = settings.find {it.key == "rCapab$i"}
+    if(!thisCapab) return result
+	if(thisCapab.value == "Time of day") result = "Time between " + timeIntervalLabel()
+    else if(thisCapab.value == "Smart Home Monitor") {
+    	def thisState = (settings.find {it.key == "state$i"}).value
+    	result = "SHM state is " + (thisState in ["away", "stay"] ? "Arm ($thisState)" : "Disarm")
+	} else if(thisCapab.value == "Days of week") result = "Day i" + (days.size() > 1 ? "n " + days : "s " + days[0])
+	else if(thisCapab.value == "Mode") result = "Mode i" + (modes.size() > 1 ? "n " + modes : "s " + modes[0])
+	else {
 		def thisDev = settings.find {it.key == "rDev$i"}
 		if(!thisDev) return result
 		def thisAll = settings.find {it.key == "AllrDev$i"}
@@ -251,6 +274,7 @@ def conditionLabelN(i) {
 		else if(thisCapab.value == "Energy meter")	result = "Energy level of " 
 		else if(thisCapab.value == "Power meter")	result = "Power level of " 
 		else if(thisCapab.value == "Battery")		result = "Battery level of "
+        else if(thisCapab.value == "Rule truth") 	result = "Rule truth becomes "
 		result = result + (myAny ? thisDev.value : thisDev.value[0]) + " " + ((thisAll ? thisAll.value : false) ? "all " : myAny)
 		def thisRel = settings.find {it.key == "RelrDev$i"}
 		if(thisCapab.value in ["Temperature", "Humidity", "Illuminance", "Dimmer level", "Energy meter", "Power meter", "Battery"]) result = result + " " + thisRel.value + " "
@@ -258,8 +282,7 @@ def conditionLabelN(i) {
 		def thisRelDev = settings.find {it.key == "relDevice$i"}
 		if(thisRelDev) result = result + thisRelDev.value
 		else result = result + thisState.value
-		result = result + (getOperand(i) ? " [TRUE]" : " [FALSE]")
-    }
+	}
 	return result
 }
 
@@ -290,7 +313,7 @@ def inputLeft(sub) {
 		if(settings["condL$state.n"]) {
 			state.str = state.str + settings["condL$state.n"]
 			def myCond = 0
-			for (int i = 1; i <= howMany; i++) if(conditionLabelN(i) == settings["condL$state.n"]) myCond = i
+			for (int i = 1; i < state.howMany; i++) if(conditionLabelN(i) == settings["condL$state.n"]) myCond = i
 			state.eval << myCond
 			paragraph(state.str)
 		}
@@ -318,7 +341,7 @@ def inputRight(sub) {
 			if(settings["condR$state.n"]) {
 				state.str = state.str + settings["condR$state.n"]
 				def myCond = 0
-				for (int i = 1; i <= howMany; i++) if(conditionLabelN(i) == settings["condR$state.n"]) myCond = i
+				for (int i = 1; i < state.howMany; i++) if(conditionLabelN(i) == settings["condR$state.n"]) myCond = i
 				state.eval << myCond
 				paragraph(state.str)
 			}
@@ -342,8 +365,6 @@ def inputLeftAndRight(sub) {
 	inputRight(sub)
 }
 
-// Action selection code follows
-
 def stripBrackets(str) {
 	def i = str.indexOf('[')
 	def j = str.indexOf(']')
@@ -351,8 +372,14 @@ def stripBrackets(str) {
 	return result
 }
 
-def setActTrue(dev, str) {
+// Action selection code follows
+
+def checkActTrue(dev, str) {
 	if(dev) state.actsTrue = state.actsTrue + stripBrackets("$str") + "\n"
+}
+
+def setActTrue(str) {
+	state.actsTrue = state.actsTrue + stripBrackets("$str") + "\n"
 }
 
 def addToActTrue(str) {
@@ -363,8 +390,12 @@ def buildActTrue(str, brackets) {
 	state.actsTrue = state.actsTrue + (brackets ? stripBrackets("$str") : str)
 }
 
-def setActFalse(dev, str) {
+def checkActFalse(dev, str) {
 	if(dev) state.actsFalse = state.actsFalse + stripBrackets("$str") + "\n"
+}
+
+def setActFalse(str) {
+	state.actsFalse = state.actsFalse + stripBrackets("$str") + "\n"
 }
 
 def addToActFalse(str) {
@@ -380,9 +411,9 @@ def selectActionsTrue() {
 		state.actsTrue = ""
 		section("") {
 			input "onSwitchTrue", "capability.switch", title: "Turn on these switches", multiple: true, required: false, submitOnChange: true
-			setActTrue(onSwitchTrue, "On: $onSwitchTrue")
+			checkActTrue(onSwitchTrue, "On: $onSwitchTrue")
 			input "offSwitchTrue", "capability.switch", title: "Turn off these switches", multiple: true, required: false, submitOnChange: true
-			setActTrue(offSwitchTrue, "Off: $offSwitchTrue")
+			checkActTrue(offSwitchTrue, "Off: $offSwitchTrue")
 			input "delayedOffTrue", "capability.switch", title: "Turn on/off these switches after a delay (default is OFF)", multiple: true, required: false, submitOnChange: true
 			if(delayedOffTrue) {
 				input "delayOnOffTrue", "bool", title: "Turn ON after the delay?", multiple: false, required: false, defaultValue: false, submitOnChange: true
@@ -390,7 +421,7 @@ def selectActionsTrue() {
 				if(delayMinutesTrue) {
 					def delayStrTrue = "Delayed " + (delayOnOffTrue ? "On:" : "Off:") + " $delayedOffTrue: $delayMinutesTrue minute"
 					if(delayMinutesTrue > 1) delayStrTrue = delayStrTrue + "s"
-					setActTrue(delayedOffTrue, delayStrTrue)
+					setActTrue(delayStrTrue)
 				}
 			}
 			input "pendedOffTrue", "capability.switch", title: "Turn on/off these switches after a delay, pending cancellation (default is OFF)", multiple: true, required: false, submitOnChange: true
@@ -400,15 +431,19 @@ def selectActionsTrue() {
 				if(pendMinutesTrue) {
 					def pendStrTrue = "Pending "+ (pendOnOffTrue ? "On:" : "Off:") + " $pendedOffTrue: $pendMinutesTrue minute"
 					if(pendMinutesTrue > 1) pendStrTrue = pendStrTrue + "s"
-					setActTrue(pendedOffTrue, pendStrTrue)
+					setActTrue(pendStrTrue)
 				}
 			}
 			input "dimATrue", "capability.switchLevel", title: "Set these dimmers", multiple: true, submitOnChange: true, required: false
-			if(dimATrue) input "dimLATrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
-			if(dimLATrue) setActTrue(dimATrue, "Dim: $dimATrue: $dimLATrue")
+			if(dimATrue) {
+            	input "dimLATrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
+				if(dimLATrue) setActTrue("Dim: $dimATrue: $dimLATrue")
+            }
 			input "dimBTrue", "capability.switchLevel", title: "Set these other dimmers", multiple: true, submitOnChange: true, required: false
-			if(dimBTrue) input "dimLBTrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
-			if(dimLBTrue) setActTrue(dimBTrue, "Dim: $dimBTrue: $dimLBTrue")
+			if(dimBTrue) {
+            	input "dimLBTrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
+				if(dimLBTrue) setActTrue("Dim: $dimBTrue: $dimLBTrue")
+
 			input "ctTrue", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
 			if(ctTrue) input "ctLTrue", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
 			if(ctLTrue) setActTrue(ctTrue, "Color Temperature: $ctTrue: $ctLTrue")
@@ -422,13 +457,13 @@ def selectActionsTrue() {
 				if(colorLevelTrue) addToActTrue("Level: $colorLevelTrue")
 			}            
 			input "lockTrue", "capability.lock", title: "Lock these locks", multiple: true, required: false, submitOnChange: true
-			setActTrue(lockTrue, "Lock: $lockTrue")
+			checkActTrue(lockTrue, "Lock: $lockTrue")
 			input "unlockTrue", "capability.lock", title: "Unlock these locks", multiple: true, required: false, submitOnChange: true
-			setActTrue(unlockTrue, "Unlock: $unlockTrue")
+			checkActTrue(unlockTrue, "Unlock: $unlockTrue")
 			input "openValveTrue", "capability.valve", title: "Open these valves", multiple: true, required: false, submitOnChange: true
-			setActTrue(openValveTrue, "Open: $openValveTrue")
+			checkActTrue(openValveTrue, "Open: $openValveTrue")
 			input "closeValveTrue", "capability.valve", title: "Close these valves", multiple: true, required: false, submitOnChange: true
-			setActTrue(closeValveTrue, "Close: $closeValveTrue")
+			checkActTrue(closeValveTrue, "Close: $closeValveTrue")
 			input "thermoTrue", "capability.thermostat", title: "Set these thermostats", multiple: true, required: false, submitOnChange: true
 			if(thermoTrue) {
 				input "thermoModeTrue", "enum", title: "Select thermostate mode", multiple: false, required: false, options: ["auto", "heat", "cool", "off"], submitOnChange: true
@@ -442,6 +477,8 @@ def selectActionsTrue() {
 				if(thermoFanTrue) buildActTrue("Fan setting $thermoFanTrue", false)
 				addToActTrue("")
 			}
+			input "alarmTrue", "enum", title: "Set the alarm state", multiple: false, required: false, options: ["away" : "Arm (away)", "stay" : "Arm (stay)", "off" : "Disarm"], submitOnChange: true
+			if(alarmTrue) addToActTrue("Alarm: " + (alarmTrue in ["away", "stay"] ? "Arm ($alarmTrue)" : "Disarm"))
 			def myModes = []
 			location.modes.each {myModes << "$it"}
 			input "modeTrue", "enum", title: "Set the mode", multiple: false, required: false, options: myModes.sort(), submitOnChange: true
@@ -449,6 +486,9 @@ def selectActionsTrue() {
 			def phrases = location.helloHome?.getPhrases()*.label
 			input "myPhraseTrue", "enum", title: "Routine to run", required: false, options: phrases.sort(), submitOnChange: true
 			if(myPhraseTrue) addToActTrue("Routine: $myPhraseTrue")
+            def theseRules = parent.ruleList(app.label)
+            input "ruleTrue", "enum", title: "Rules to evaluate", required: false, multiple: true, options: theseRules.sort(), submitOnChange: true
+            if(ruleTrue) setActTrue("Rules: $ruleTrue")
 			href "selectMsgTrue", title: "Send message", description: state.msgTrue ? state.msgTrue : "Tap to set", state: state.msgTrue ? "complete" : null
 			if(state.msgTrue) addToActTrue(state.msgTrue)
 			input "delayTrue", "number", title: "Delay the effect of this rule by this many minutes", required: false, submitOnChange: true
@@ -467,9 +507,9 @@ def selectActionsFalse() {
 		state.actsFalse = ""
 		section("") {
 			input "onSwitchFalse", "capability.switch", title: "Turn on these switches", multiple: true, required: false, submitOnChange: true
-			setActFalse(onSwitchFalse, "On: $onSwitchFalse")
+			checkActFalse(onSwitchFalse, "On: $onSwitchFalse")
 			input "offSwitchFalse", "capability.switch", title: "Turn off these switches", multiple: true, required: false, submitOnChange: true
-			setActFalse(offSwitchFalse, "Off: $offSwitchFalse")
+			checkActFalse(offSwitchFalse, "Off: $offSwitchFalse")
 			input "delayedOffFalse", "capability.switch", title: "Turn on/off these switches after a delay (default is OFF)", multiple: true, required: false, submitOnChange: true
 			if(delayedOffFalse) {
 				input "delayOnOffFalse", "bool", title: "Turn ON after the delay?", multiple: false, required: false, defaultValue: false, submitOnChange: true
@@ -477,7 +517,7 @@ def selectActionsFalse() {
 				if(delayMinutesFalse) {
 					def delayStrFalse = "Delayed " + (delayOnOffFalse ? "On:" : "Off:") + " $delayedOffFalse: $delayMinutesFalse minute"
 					if(delayMinutesFalse > 1) delayStrFalse = delayStrFalse + "s"
-					setActFalse(delayedOffFalse, delayStrFalse)
+					setActFalse(delayStrFalse)
 				}
 			}
 			input "pendedOffFalse", "capability.switch", title: "Turn on/off these switches after a delay, pending cancellation (default is OFF)", multiple: true, required: false, submitOnChange: true
@@ -487,15 +527,19 @@ def selectActionsFalse() {
 				if(pendMinutesFalse) {
 					def pendStrFalse = "Pending "+ (pendOnOffFalse ? "On:" : "Off:") + " $pendedOffFalse: $pendMinutesFalse minute"
 					if(pendMinutesFalse > 1) pendStrFalse = pendStrFalse + "s"
-					setActFalse(pendedOffFalse, pendStrFalse)
+					setActFalse(pendStrFalse)
 				}
 			}
 			input "dimAFalse", "capability.switchLevel", title: "Set these dimmers", multiple: true, submitOnChange: true, required: false
-			if(dimAFalse) input "dimLAFalse", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
-			if(dimLAFalse) setActFalse(dimAFalse, "Dim: $dimAFalse: $dimLAFalse")
+			if(dimAFalse) {
+            	input "dimLAFalse", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
+				if(dimLAFalse) setActFalse("Dim: $dimAFalse: $dimLAFalse")
+            }
 			input "dimBFalse", "capability.switchLevel", title: "Set these other dimmers", multiple: true, submitOnChange: true, required: false
-			if(dimBFalse) input "dimLBFalse", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
-			if(dimLBFalse) setActFalse(dimBFalse, "Dim: $dimBFalse: $dimLBFalse")
+			if(dimBFalse) {
+            	input "dimLBFalse", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
+				if(dimLBFalse) setActFalse("Dim: $dimBFalse: $dimLBFalse")
+            }
 			input "ctFalse", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
 			if(ctFalse) input "ctLFalse", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
 			if(ctLFalse) setActFalse(ctFalse, "Color Temperature: $ctFalse: $ctLFalse")
@@ -509,13 +553,13 @@ def selectActionsFalse() {
 				if(colorLevelFalse) addToActFalse("Level: $colorLevelFalse")
 			}            
 			input "lockFalse", "capability.lock", title: "Lock these locks", multiple: true, required: false, submitOnChange: true
-			setActFalse(lockFalse, "Lock: $lockFalse")
+			checkActFalse(lockFalse, "Lock: $lockFalse")
 			input "unlockFalse", "capability.lock", title: "Unlock these locks", multiple: true, required: false, submitOnChange: true
-			setActFalse(unlockFalse, "Unlock: $unlockFalse")
+			checkActFalse(unlockFalse, "Unlock: $unlockFalse")
 			input "openValveFalse", "capability.valve", title: "Open these valves", multiple: true, required: false, submitOnChange: true
-			setActTrue(openValveFalse, "Open: $openValveFalse")
+			checkActFalse(openValveFalse, "Open: $openValveFalse")
 			input "closeValveFalse", "capability.valve", title: "Close these valves", multiple: true, required: false, submitOnChange: true
-			setActTrue(closeValveFalse, "Close: $closeValveFalse")
+			checkActFalse(closeValveFalse, "Close: $closeValveFalse")
 			input "thermoFalse", "capability.thermostat", title: "Set these thermostats", multiple: true, required: false, submitOnChange: true
 			if(thermoFalse) {
 				input "thermoModeFalse", "enum", title: "Select thermostate mode", multiple: false, required: false, options: ["auto", "heat", "cool", "off"], submitOnChange: true
@@ -529,6 +573,8 @@ def selectActionsFalse() {
 				if(thermoFanFalse) buildActFalse("Fan setting $thermoFanFalse", false)
 				addToActFalse("")
 			}
+			input "alarmFalse", "enum", title: "Set the alarm state", multiple: false, required: false, options: ["away" : "Arm (away)", "stay" : "Arm (stay)", "off" : "Disarm"], submitOnChange: true
+			if(alarmFalse) addToActFalse("Alarm: " + (alarmFalse in ["away", "stay"] ? "Arm ($alarmFalse)" : "Disarm"))
 			def myModes = []
 			location.modes.each {myModes << "$it"}
 			input "modeFalse", "enum", title: "Set the mode", multiple: false, required: false, options: myModes.sort(), submitOnChange: true
@@ -536,6 +582,9 @@ def selectActionsFalse() {
 			def phrases = location.helloHome?.getPhrases()*.label
 			input "myPhraseFalse", "enum", title: "Routine to run", required: false, options: phrases.sort(), submitOnChange: true
 			if(myPhraseFalse) addToActFalse("Routine: $myPhraseFalse")
+            def theseRules = parent.ruleList(app.label)
+            input "ruleFalse", "enum", title: "Rules to evaluate", required: false, multiple: true, options: theseRules.sort(), submitOnChange: true
+            if(ruleFalse) setActFalse("Rules: $ruleFalse")
 			href "selectMsgFalse", title: "Send message", description: state.msgFalse ? state.msgFalse : "Tap to set", state: state.msgFalse ? "complete" : null
 			if(state.msgFalse) addToActFalse(state.msgFalse)
 			input "delayFalse", "number", title: "Delay the effect of this rule by this many minutes", required: false, submitOnChange: true
@@ -597,7 +646,13 @@ def installed() {
 def updated() {
 	unschedule()
 	unsubscribe()
+    parent.unSubscribeRule(app.label)
 	initialize()
+}
+
+def uninstalled() {
+//	log.debug "uninstalled called"
+	parent.removeChild(app.label)
 }
 
 def initialize() {
@@ -607,6 +662,9 @@ def initialize() {
 		switch(capab) {
 			case "Mode": 
 				subscribe(location, "mode", allHandler)
+				break
+			case "Smart Home Monitor": 
+				subscribe(location, "alarmSystemStatus", allHandler)
 				break
 			case "Time of day":
 				scheduleTimeOfDay()
@@ -641,6 +699,15 @@ def initialize() {
 				subscribe((settings.find{it.key == "rDev$i"}).value, "illuminance", allHandler)
 				if(myRelDev) subscribe(myRelDev.value, "illuminance", allHandler)
 				break
+			case "Carbon monoxide detector":
+				subscribe((settings.find{it.key == "rDev$i"}).value, "carbonMonoxide", allHandler)
+				break
+			case "Smoke detector":
+				subscribe((settings.find{it.key == "rDev$i"}).value, "smoke", allHandler)
+				break
+			case "Rule truth":
+				parent.subscribeRule(app.label, (settings.find{it.key == "rDev$i"}).value, myState, allHandler)
+				break
 			case "Water sensor":
 				subscribe((settings.find{it.key == "rDev$i"}).value, "water", allHandler)
 				break
@@ -668,28 +735,36 @@ def compare(a, rel, b, relDev) {
 	return result
 }
 
-def checkCondAny(dev, state, cap, rel, relDev) {
+def checkCondAny(dev, stateX, cap, rel, relDev) {
 	def result = false
-	if     (cap == "Temperature") 	dev.currentTemperature.each 	{result = result || compare(it, rel, state, reldev ? relDev.currentTemperature : null)}
-	else if(cap == "Humidity")	dev.currentHumidity.each    	{result = result || compare(it, rel, state, reldev ? relDev.currentHumidity : null)}
-	else if(cap == "Illuminance") 	dev.currentIlluminance.each 	{result = result || compare(it, rel, state, reldev ? relDev.currentIlluminance : null)}
-	else if(cap == "Dimmer level")	dev.currentLevel.each		{result = result || compare(it, rel, state, relDev ? relDev.currentLevel : null)}
-	else if(cap == "Energy meter")	dev.currentEnergy.each		{result = result || compare(it, rel, state, relDev ? relDev.currentEnergy : null)}
-	else if(cap == "Power meter")	dev.currentPower.each		{result = result || compare(it, rel, state, relDev ? relDev.currentPower : null)}
-	else if(cap == "Battery")	dev.currentBattery.each		{result = result || compare(it, rel, state, relDev ? relDev.currentBattery : null)}
-	else if(cap == "Water sensor")	result = state in dev.currentWater
-	else if(cap == "Switch") 	result = state in dev.currentSwitch
-	else if(cap == "Motion") 	result = state in dev.currentMotion
-	else if(cap == "Acceleration") 	result = state in dev.currentAcceleration
-	else if(cap == "Contact") 	result = state in dev.currentContact
-	else if(cap == "Presence") 	result = state in dev.currentPresence
-	else if(cap == "Lock") 		result = state in dev.currentLock
+	if     (cap == "Temperature") 	dev.currentTemperature.each 	{result = result || compare(it, rel, stateX, reldev ? relDev.currentTemperature : null)}
+	else if(cap == "Humidity")	dev.currentHumidity.each    	{result = result || compare(it, rel, stateX, reldev ? relDev.currentHumidity : null)}
+	else if(cap == "Illuminance") 	dev.currentIlluminance.each 	{result = result || compare(it, rel, stateX, reldev ? relDev.currentIlluminance : null)}
+	else if(cap == "Dimmer level")	dev.currentLevel.each		{result = result || compare(it, rel, stateX, relDev ? relDev.currentLevel : null)}
+	else if(cap == "Energy meter")	dev.currentEnergy.each		{result = result || compare(it, rel, stateX, relDev ? relDev.currentEnergy : null)}
+	else if(cap == "Power meter")	dev.currentPower.each		{result = result || compare(it, rel, stateX, relDev ? relDev.currentPower : null)}
+	else if(cap == "Battery")	dev.currentBattery.each		{result = result || compare(it, rel, stateX, relDev ? relDev.currentBattery : null)}
+    else if(cap == "Rule truth")	dev.each {
+    	def truth = null
+        if(it == state.ourRule) truth = state.ourTruth
+    	else truth = parent.currentRule(it)
+    	result = result || "$stateX" == "$truth"
+	} 
+    else if(cap == "Water sensor")	result = stateX in dev.currentWater
+	else if(cap == "Switch") 	result = stateX in dev.currentSwitch
+	else if(cap == "Motion") 	result = stateX in dev.currentMotion
+	else if(cap == "Acceleration") 	result = stateX in dev.currentAcceleration
+	else if(cap == "Contact") 	result = stateX in dev.currentContact
+	else if(cap == "Presence") 	result = stateX in dev.currentPresence
+	else if(cap == "Smoke detector") 	result = stateX in dev.currentSmoke
+	else if(cap == "Carbon monoxide detector") 	result = stateX in dev.currentCarbonMonoxide
+	else if(cap == "Lock") 		result = stateX in dev.currentLock
 //	log.debug "CheckAny $cap $result"
 	return result
 }
 
 
-def checkCondAll(dev, state, cap, rel, relDev) {
+def checkCondAll(dev, stateX, cap, rel, relDev) {
 	def flip = ["on": "off",
 		"off": "on",
                 "active": "inactive",
@@ -698,25 +773,35 @@ def checkCondAll(dev, state, cap, rel, relDev) {
                 "closed": "open",
                 "wet": "dry",
                 "dry": "wet",
+                "detected": "clear",
+                "clear": "detected",
                 "present": "not present",
                 "not present": "present",
                 "locked": "unlocked",
                 "unlocked": "locked"]
 	def result = true
-	if     (cap == "Temperature") 		dev.currentTemperature.each 	{result = result && compare(it, rel, state, reldev ? relDev.currentTemperature : null)}
-	else if(cap == "Humidity") 		dev.currentHumidity.each    	{result = result && compare(it, rel, state, reldev ? relDev.currentHumidity : null)}
-	else if(cap == "Illuminance") 		dev.currentIlluminance.each 	{result = result && compare(it, rel, state, reldev ? relDev.currentIlluminance : null)}
-	else if(cap == "Dimmer level")		dev.currentLevel.each		{result = result && compare(it, rel, state, reldev ? relDev.currentLevel : null)}
-	else if(cap == "Energy meter")		dev.currentEnergy.each		{result = result && compare(it, rel, state, reldev ? relDev.currentEnergy : null)}
-	else if(cap == "Power meter")		dev.currentPower.each		{result = result && compare(it, rel, state, reldev ? relDev.currentPower : null)}
-	else if(cap == "Battery")		dev.currentBattery.each		{result = result && compare(it, rel, state, reldev ? relDev.currentBattery : null)}
-	else if(cap == "Water sensor")		result = !(flip[state] in dev.currentSwitch)
-	else if(cap == "Switch") 		result = !(flip[state] in dev.currentSwitch)
-	else if(cap == "Motion") 		result = !(flip[state] in dev.currentMotion)
-	else if(cap == "Acceleration") 		result = !(flip[state] in dev.currentAcceleration)
-	else if(cap == "Contact") 		result = !(flip[state] in dev.currentContact)
-	else if(cap == "Presence") 		result = !(flip[state] in dev.currentPresence)
-	else if(cap == "Lock") 			result = !(flip[state] in dev.currentLock)
+	if     (cap == "Temperature") 		dev.currentTemperature.each 	{result = result && compare(it, rel, stateX, reldev ? relDev.currentTemperature : null)}
+	else if(cap == "Humidity") 		dev.currentHumidity.each    	{result = result && compare(it, rel, stateX, reldev ? relDev.currentHumidity : null)}
+	else if(cap == "Illuminance") 		dev.currentIlluminance.each 	{result = result && compare(it, rel, stateX, reldev ? relDev.currentIlluminance : null)}
+	else if(cap == "Dimmer level")		dev.currentLevel.each		{result = result && compare(it, rel, stateX, reldev ? relDev.currentLevel : null)}
+	else if(cap == "Energy meter")		dev.currentEnergy.each		{result = result && compare(it, rel, stateX, reldev ? relDev.currentEnergy : null)}
+	else if(cap == "Power meter")		dev.currentPower.each		{result = result && compare(it, rel, stateX, reldev ? relDev.currentPower : null)}
+	else if(cap == "Battery")		dev.currentBattery.each		{result = result && compare(it, rel, stateX, reldev ? relDev.currentBattery : null)}
+    else if(cap == "Rule truth")	dev.each {
+    											def rule = null
+    											if(it == state.ourRule) rule = state.ourTruth
+    											else rule = parent.currentRule(it)
+    											result = result && "$stateX" == "$rule"
+                                                }
+	else if(cap == "Water sensor")		result = !(flip[stateX] in dev.currentSwitch)
+	else if(cap == "Switch") 		result = !(flip[stateX] in dev.currentSwitch)
+	else if(cap == "Motion") 		result = !(flip[stateX] in dev.currentMotion)
+	else if(cap == "Acceleration") 		result = !(flip[stateX] in dev.currentAcceleration)
+	else if(cap == "Contact") 		result = !(flip[stateX] in dev.currentContact)
+	else if(cap == "Presence") 		result = !(flip[stateX] in dev.currentPresence)
+	else if(cap == "Smoke detector") 	result = !(flip[stateX] in dev.currentSmoke)
+	else if(cap == "Carbon monoxide detector") 	result = !(flip[stateX] in dev.currentCarbonMonoxide)
+	else if(cap == "Lock") 			result = !(flip[stateX] in dev.currentLock)
 //	log.debug "CheckAll $cap $result"
 	return result
 }
@@ -728,6 +813,7 @@ def getOperand(i) {
 	if     (capab == "Mode") result = modeOk
 	else if(capab == "Time of day") result = timeOk
 	else if(capab == "Days of week") result = daysOk
+    else if(capab == "Smart Home Monitor") result = (settings.find {it.key == "state$i"}).value == location.currentState("alarmSystemStatus")?.value
 	else {
 		def myDev = 	settings.find {it.key == "rDev$i"}
 		def myState = 	settings.find {it.key == "state$i"}
@@ -824,6 +910,7 @@ def runRule(delay) {
 		if     (delayTrue > 0 && !delay && success)	doDelayTrue(delayTrue)
 		else if(delayFalse > 0 && !delay && !success)	doDelayFalse(delayFalse)
 		else {
+            parent.setRuleTruth(app.label, success)
         	if(success) {
 				if(onSwitchTrue) 	onSwitchTrue.on()
 				if(offSwitchTrue) 	offSwitchTrue.off()
@@ -838,11 +925,13 @@ def runRule(delay) {
 				if(unlockTrue) 		unlockTrue.unlock()
 				if(openValveTrue)	openValveTrue.open()
 				if(closeValveTrue)	closeValveTrue.close()
-				if(thermoTrue)		{	if(thermoModeTrue) thermoTrue.setThermostatMode(thermoModeTrue)
-								if(thermoSetHeatTrue) thermoTrue.setHeatingSetpoint(thermoSetHeatTrue)
-								if(thermoSetCoolTrue) thermoTrue.setCoolingSetpoint(thermoSetCoolTrue) 	
-                                if(thermoFanTrue)	  thermoTrue.setThermostatFanMode(thermoFanTrue)   }
+				if(thermoTrue)		{	if(thermoModeTrue) 	thermoTrue.setThermostatMode(thermoModeTrue)
+								if(thermoSetHeatTrue)	thermoTrue.setHeatingSetpoint(thermoSetHeatTrue)
+								if(thermoSetCoolTrue)	thermoTrue.setCoolingSetpoint(thermoSetCoolTrue) 	
+                                				if(thermoFanTrue) 	thermoTrue.setThermostatFanMode(thermoFanTrue)   }
+				if(alarmTrue)		sendLocationEvent(name: "alarmSystemStatus", value: "$alarmTrue")
 				if(modeTrue) 		setLocationMode(modeTrue)
+        		if(ruleTrue)		parent.runRule(ruleTrue, app.label)
 				if(myPhraseTrue)	location.helloHome.execute(myPhraseTrue)
 				if(pushTrue)		sendPush(msgTrue ?: "Rule $app.label True")
 				if(phoneTrue)		sendSms(phoneTrue, msgTrue ?: "Rule $app.label True")
@@ -860,11 +949,13 @@ def runRule(delay) {
 				if(unlockFalse) 	unlockFalse.unlock()
 				if(openValveFalse)	openValveFalse.open()
 				if(closeValveFalse)	closeValveFalse.close()
-				if(thermoFalse)		{	if(thermoModeFalse) thermoFalse.setThermostatMode(thermoModeFalse)
-								if(thermoSetHeatFalse) thermoFalse.setHeatingSetpoint(thermoSetHeatFalse)
-								if(thermoSetCoolFalse) thermoFalse.setCoolingSetpoint(thermoSetCoolFalse) 	
-                                if(thermoFanFalse)	  thermoFalse.setThermostatFanMode(thermoFanFalse)   }
+				if(thermoFalse)		{	if(thermoModeFalse) 	thermoFalse.setThermostatMode(thermoModeFalse)
+								if(thermoSetHeatFalse) 	thermoFalse.setHeatingSetpoint(thermoSetHeatFalse)
+								if(thermoSetCoolFalse) 	thermoFalse.setCoolingSetpoint(thermoSetCoolFalse) 	
+                                				if(thermoFanFalse)	thermoFalse.setThermostatFanMode(thermoFanFalse)   }
+				if(alarmFalse)		sendLocationEvent(name: "alarmSystemStatus", value: "$alarmFalse")
 				if(modeFalse) 		setLocationMode(modeFalse)
+        		if(ruleFalse)		parent.runRule(ruleFalse, app.label)
 				if(myPhraseFalse) 	location.helloHome.execute(myPhraseFalse)
 				if(pushFalse)		sendPush(msgFalse ?: "Rule $app.label False")
 				if(phoneFalse)		sendSms(phoneFalse, msgFalse ?: "Rule $app.label False")
@@ -893,19 +984,23 @@ def timeHandler() {
 }
 
 def delayOffTrue() {
-	if(delayOnOffTrue && allOk) delayedOffTrue.on() else delayedOffTrue.off()
+	if(!allOk) return
+	if(delayOnOffTrue) delayedOffTrue.on() else delayedOffTrue.off()
 }
 
 def pendingOffTrue() {
-	if(pendOnOffTrue && allOk) pendedOffTrue.on() else pendedOffTrue.off()
+	if(!allOk) return
+	if(pendOnOffTrue) pendedOffTrue.on() else pendedOffTrue.off()
 }
 
 def delayOffFalse() {
-	if(delayOnOffFalse && allOk) delayedOffFalse.on() else delayedOffFalse.off()
+	if(!allOk) return
+	if(delayOnOffFalse) delayedOffFalse.on() else delayedOffFalse.off()
 }
 
 def pendingOffFalse() {
-	if(pendOnOffFalse && allOk) pendedOffFalse.on() else pendedOffFalse.off()
+	if(!allOk) return
+	if(pendOnOffFalse) pendedOffFalse.on() else pendedOffFalse.off()
 }
 
 def delayRuleTrue() {
@@ -918,6 +1013,18 @@ def delayRuleFalse() {
 
 def disabledHandler(evt) {
 	state.disabled = evt.value == "on"
+}
+
+def ruleHandler(rule, truth) {
+	if(logging) log.info "$app.label: $rule is $truth"
+    state.ourRule = rule
+    state.ourTruth = truth
+    runRule(true)
+}
+
+def ruleEvaluator(rule) {
+	if(logging) log.info "$app.label: $rule evaluate"
+    runRule(true)
 }
 
 //  private execution filter methods follow
@@ -1033,7 +1140,7 @@ private setColor(trufal) {
 			hueColor = 70
 			break;
 		case "Green":
-			hueColor = 39
+			hueColor = 35
 			break;
 		case "Yellow":
 			hueColor = 25
