@@ -3,7 +3,7 @@
  *
  *  Copyright 2015 Bruce Ravenel and Mike Maxwell
  *
- *  Version 1.1   5 Dec 2015
+ *  Version 1.5   16 Dec 2015
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -30,44 +30,49 @@ definition(
 
 preferences {
 	page(name: "mainPage")
+    page(name: "removePage")
 }
 
 def mainPage() {
     dynamicPage(name: "mainPage", title: "Rules and Triggers", install: true, uninstall: false, submitOnChange: true) {
-            section {
-                    app(name: "childRules", appName: "Rule", namespace: "bravenel", title: "Create New Rule...", multiple: true)
-            }
-            section {
-                    app(name: "childTriggers", appName: "Trigr", namespace: "bravenel", title: "Create New Trigger...", multiple: true)
-            }
+    	if(!state.setup) initialize(true)
+        section {
+            app(name: "childRules", appName: "Rule", namespace: "bravenel", title: "Create New Rule...", multiple: true)
+        }
+        section {
+        	href "removePage", description: "Remove Rule Machine", title: ""
+        }
+    }
+}
+
+def removePage() {
+	dynamicPage(name: "removePage", title: "Remove Rule Machine", install: false, uninstall: true) {
+    	section ("WARNING! Removing Rule Machine also removes all Rules") {
+        }
     }
 }
 
 def installed() {
-    initialize()
+    if(!state.setup) initialize(true) else initialize(false)
 }
 
 def updated() {
-    unsubscribe()
-    initialize()
+    initialize(false)
 }
 
-def initialize() {
-	if(!state.setup) {
+def initialize(first) {
+	if(first) {
 		state.ruleState = [:]
     	state.ruleSubscribers = [:]
     }
     childApps.each {child ->
 		if(child.name == "Rule") {
-			log.info "Installed Rules: ${child.label}"
-            if(!state.setup) {
+			log.info "Installed Rules and Triggers: ${child.label}"
+            if(first) {
 				state.ruleState[child.label] = null
 				state.ruleSubscribers[child.label] = [:]
             }
-		}
-    }
-    childApps.each {child ->
-            if(child.name == "Trigr") log.info "Installed Triggers: ${child.label}"
+		} 
     }
     state.setup = true
 }
@@ -75,7 +80,7 @@ def initialize() {
 def ruleList(appLabel) {
 	def result = []
     childApps.each { child ->
-    	if(child.name == "Rule" && child.label != appLabel) result << child.label
+    	if(child.name == "Rule" && child.label != appLabel && state.ruleState[child.label] != null) result << child.label
     }
     return result
 }
@@ -91,7 +96,6 @@ def subscribeRule(appLabel, ruleName, ruleTruth, childMethod) {
 
 def setRuleTruth(appLabel, ruleTruth) {
 //	log.debug "setRuleTruth1: $appLabel, $ruleTruth"
-	if(!state.setup) initialize()
     state.ruleState[appLabel] = ruleTruth
     def thisList = state.ruleSubscribers[appLabel]
     thisList.each {
@@ -115,8 +119,8 @@ def childUninstalled() {
 def removeChild(appLabel) {
 //	log.debug "removeChild: $appLabel"
     unSubscribeRule(appLabel)
-    if(state.ruleState[appLabel]) state.ruleState.remove(appLabel)
-    if(state.ruleSubscribers[appLabel]) state.ruleSubscribers.remove(appLabel)
+    if(state.ruleState[appLabel] != null) state.ruleState.remove(appLabel)
+    if(state.ruleSubscribers[appLabel] != null) state.ruleSubscribers.remove(appLabel)
 }
 
 def unSubscribeRule(appLabel) {
@@ -138,4 +142,3 @@ def runRule(rule, appLabel) {
         }
     }
 }
-
