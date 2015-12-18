@@ -377,6 +377,9 @@ def selectActionsTrue() {
 			input "toggleDimmerTrue", "capability.switchLevel", title: "Toggle these dimmers", multiple: true, required: false, submitOnChange: true
 			if(toggleDimmerTrue) input "dimTogTrue", "number", title: "To this level", range: "0..100", required: true, submitOnChange: true
 			if(dimTogTrue) setActTrue(toggleDimmerTrue, "Toggle: $toggleDimmerTrue: $dimTogTrue")
+			input "ctTrue", "capability.colorTemperature", title: "Set color temperature for these bulbs", multiple: true, submitOnChange: true, required: false
+			if(ctTrue) input "ctLTrue", "number", title: "To this color temperature", range: "2000..6500", required: true, submitOnChange: true
+			if(ctLTrue) setActTrue(ctTrue, "Color Temperature: $ctTrue: $ctLTrue")
 			input "bulbsTrue", "capability.colorControl", title: "Set color for these bulbs", multiple: true, required: false, submitOnChange: true
 			if(bulbsTrue) {
 				input "colorTrue", "enum", title: "Bulb color?", required: true, multiple: false, submitOnChange: true,
@@ -708,6 +711,7 @@ def doTrigger(delay) {
 		if(dimATrue) 			dimATrue.setLevel(dimLATrue)
 		if(dimBTrue) 			dimBTrue.setLevel(dimLBTrue)
 		if(toggleDimmerTrue)		dimToggle(toggleDimmerTrue, dimTogTrue)
+		if(ctTrue)   		ctTrue.setColorTemperature(ctLTrue)
 		if(bulbsTrue)			setColor(true)
 		if(lockTrue) 			lockTrue.lock()
 		if(unlockTrue) 			unlockTrue.unlock()
